@@ -7,11 +7,12 @@ import dateutil.parser
 import babel
 from flask import Flask, render_template, request, Response, flash, redirect, url_for
 from flask_moment import Moment
-from flask_sqlalchemy import SQLAlchemy
 import logging
 from logging import Formatter, FileHandler
 from flask_wtf import FlaskForm
 from flask_migrate import Migrate
+from models import db, Venue, Artist, Show
+
 
 from forms import *
 
@@ -22,104 +23,10 @@ from forms import *
 app = Flask(__name__)
 moment = Moment(app)
 app.config.from_object('config')
-db = SQLAlchemy(app)
-
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
 migrate = Migrate(app, db)
 
-
-#   connect to a local postgresql database                √
-
-# ----------------------------------------------------------------------------#
-# Models.
-# ----------------------------------------------------------------------------#
-
-class Venue(db.Model):
-    __tablename__ = 'Venue'
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    genres = db.Column(db.ARRAY(db.String(120)))
-    city = db.Column(db.String(120))
-    state = db.Column(db.String(120))
-    address = db.Column(db.String(120))
-    phone = db.Column(db.String(120))
-    website = db.Column(db.String(120))
-    seeking_talent = db.Column(db.Boolean, default=False)
-    seeking_description = db.Column(db.String(500))
-    image_link = db.Column(db.String(500))
-    facebook_link = db.Column(db.String(120))
-    shows = db.relationship('Show', backref='Venue', lazy=True)
-
-    @property
-    def upcoming_shows(self):
-        upcoming_shows = [show for show in self.shows if
-                          show.start_time > datetime.now()]
-        return upcoming_shows
-
-    @property
-    def num_upcoming_shows(self):
-        return len(self.upcoming_shows)
-
-    @property
-    def past_shows(self):
-        past_shows = [show for show in self.shows if show.start_time < datetime.now()]
-        return past_shows
-
-    @property
-    def num_past_shows(self):
-        return len(self.past_shows)
-
-    # implement any missing fields, as a database migration using Flask-Migrate     √
-
-
-class Artist(db.Model):
-    __tablename__ = 'Artist'
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    city = db.Column(db.String(120))
-    state = db.Column(db.String(120))
-    phone = db.Column(db.String(120))
-    genres = db.Column(db.ARRAY(db.String(120)))
-    website = db.Column(db.String(120))
-    seeking_venue = db.Column(db.Boolean, default=False)
-    seeking_description = db.Column(db.String(500))
-    image_link = db.Column(db.String(500))
-    facebook_link = db.Column(db.String(120))
-    shows = db.relationship('Show', backref='Artist', lazy=True)
-
-    @property
-    def upcoming_shows(self):
-        upcoming_shows = [show for show in self.shows if show.start_time > datetime.now()]
-        return upcoming_shows
-
-    @property
-    def num_upcoming_shows(self):
-        return len(self.upcoming_shows)
-
-    @property
-    def past_shows(self):
-        past_shows = [show for show in self.shows if show.start_time < datetime.now()]
-
-        return past_shows
-
-    @property
-    def num_past_shows(self):
-        return len(self.past_shows)
-
-
-class Show(db.Model):
-    __tablename__ = 'Show'
-
-    id = db.Column(db.Integer, primary_key=True)
-    start_time = db.Column(db.DateTime, nullable=False)
-    artist_id = db.Column(db.Integer, db.ForeignKey('Artist.id'), nullable=False)
-    venue_id = db.Column(db.Integer, db.ForeignKey('Venue.id'), nullable=False)
-
-    #  implement any missing fields, as a database migration using Flask-Migrate √
-
-
-#  Implement Show and Artist models, and complete all model relationships and properties, as a database migration.  √
 
 # ----------------------------------------------------------------------------#
 # Filters.
@@ -261,19 +168,20 @@ def create_venue_submission():
     #  insert form data as a new Venue record in the db, instead   √
     #  modify data to be the data object returned from db insertion   √
 
+    form = VenueForm(request.form)
     try:
         venue = Venue(
-            name=request.form.get('name'),
-            city=request.form.get('city'),
-            state=request.form.get('state'),
-            address=request.form.get('address'),
-            phone=request.form.get('phone'),
-            genres=request.form.getlist('genres'),
-            website=request.form.get('website'),
-            facebook_link=request.form.get('facebook_link'),
-            image_link=request.form.get('image_link'),
-            seeking_talent=True if request.form.get('seeking_talent') == 'y' else False,
-            seeking_description=request.form.get('seeking_description')
+            name=form.name.data,
+            city=form.city.data,
+            state=form.state.data,
+            address=form.address.data,
+            phone=form.phone.data,
+            genres=form.genres.data,
+            website=form.website.data,
+            facebook_link=form.facebook_link.data,
+            image_link=form.image_link.data,
+            seeking_talent=form.seeking_talent.data,
+            seeking_description=form.seeking_description.data
         )
         db.session.add(venue)
 
@@ -282,6 +190,7 @@ def create_venue_submission():
 
     except Exception as e:
         db.session.rollback()
+        print("eerere", e)
         flash('An error occurred. Venue ' + request.form['name'] + ' could not be listed.')
 
     finally:
@@ -530,18 +439,19 @@ def create_artist_submission():
     #  insert form data as a new Venue record in the db, instead     √
     #  modify data to be the data object returned from db insertion      √
 
+    form = ArtistForm(request.form)
     try:
         artist = Artist(
-            name=request.form.get('name'),
-            city=request.form.get('city'),
-            state=request.form.get('state'),
-            phone=request.form.get('phone'),
-            genres=request.form.getlist('genres'),
-            website=request.form.get('website'),
-            facebook_link=request.form.get('facebook_link'),
-            image_link=request.form.get('image_link'),
-            seeking_venue=True if request.form.get('seeking_venue') == 'y' else False,
-            seeking_description=request.form.get('seeking_description')
+            name=form.name.data,
+            city=form.city.data,
+            state=form.state.data,
+            phone=form.phone.data,
+            genres=form.genres.data,
+            website=form.website.data,
+            facebook_link=form.facebook_link.data,
+            image_link=form.image_link.data,
+            seeking_venue=form.seeking_venue.data,
+            seeking_description=form.seeking_description.data
         )
         db.session.add(artist)
 
@@ -568,7 +478,7 @@ def shows():
     #  replace with real venues data. num_shows should be aggregated based on number of upcoming shows per venue.     √
     data = []
 
-    shows = Show.query.join(Venue, (Venue.id == Show.venue_id)).join(Artist, (Artist.id == Show.artist_id))\
+    shows = Show.query.join(Venue, (Venue.id == Show.venue_id)).join(Artist, (Artist.id == Show.artist_id)) \
         .with_entities(Show.venue_id, Venue.name.label('venue_name'), Show.artist_id, Artist.name.label('artist_name'),
                        Artist.image_link, Show.start_time)
     for show in shows:
@@ -625,6 +535,14 @@ def not_found_error(error):
 @app.errorhandler(500)
 def server_error(error):
     return render_template('errors/500.html'), 500
+
+@app.errorhandler(403)
+def server_error(error):
+    return render_template('errors/500.html'), 403
+
+@app.errorhandler(405)
+def server_error(error):
+    return render_template('errors/500.html'), 405
 
 
 if not app.debug:
